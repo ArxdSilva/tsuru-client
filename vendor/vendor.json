@@ -792,6 +792,12 @@
 			"revisionTime": "2016-04-15T01:39:28+02:00"
 		},
 		{
+			"checksumSHA1": "QU7qDysp2ueUh0UVa9CCxfmXN6I=",
+			"path": "github.com/gizak/termui",
+			"revision": "991cd3d3809135dc24daf6188dc6edcaf3d7d2d9",
+			"revisionTime": "2017-01-17T22:23:42Z"
+		},
+		{
 			"checksumSHA1": "FCeEm2BWZV/n4oTy+SGd/k0Ab5c=",
 			"origin": "github.com/tsuru/vendor/github.com/go-ini/ini",
 			"path": "github.com/go-ini/ini",
