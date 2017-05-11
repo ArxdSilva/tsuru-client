@@ -47,6 +47,7 @@ func buildManager(name string) *cmd.Manager {
 	m.Register(&client.CertificateList{})
 	m.Register(&client.CnameAdd{})
 	m.Register(&client.CnameRemove{})
+	m.Register(&client.Dashboard{})
 	m.Register(&client.EnvGet{})
 	m.Register(&client.EnvSet{})
 	m.Register(&client.EnvUnset{})
