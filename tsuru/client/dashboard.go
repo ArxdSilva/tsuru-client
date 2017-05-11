@@ -85,16 +85,17 @@ func (c *Dashboard) startDashboard(client *cmd.Client) error {
 	targetListUI.Rows = targetList
 	targetListUI.Height = height
 
-	apps := [][]string{[]string{"#", "app-list"}}
+	apps := []string{}
 	var appIndex = 1
 	sort.Sort(appsList)
 	for _, v := range appsList {
-		row := []string{fmt.Sprintf("%v", appIndex), v.Name}
-		apps = append(apps, row)
+		item := fmt.Sprintf("[%v] %s", appIndex, v.Name)
+		apps = append(apps, item)
 		appIndex++
 	}
-	appsUI := ui.NewTable()
-	appsUI.Rows = apps
+	appsUI := ui.NewList()
+	appsUI.BorderLabel = "Apps"
+	appsUI.Items = apps
 	appsUI.Height = height
 
 	units := ui.NewBarChart()
@@ -125,7 +126,10 @@ func (c *Dashboard) startDashboard(client *cmd.Client) error {
 		),
 	)
 	ui.Body.Align()
-	ui.Render(ui.Body)
+	draw := func(t int) {
+		appsUI.Items = apps[t%9:]
+		ui.Render(ui.Body)
+	}
 	ui.Handle("/sys/kbd/q", func(ui.Event) {
 		ui.StopLoop()
 	})
@@ -134,6 +138,10 @@ func (c *Dashboard) startDashboard(client *cmd.Client) error {
 		ui.Body.Align()
 		ui.Clear()
 		ui.Render(ui.Body)
+	})
+	ui.Handle("/timer/1s", func(e ui.Event) {
+		t := e.Data.(ui.EvtTimer)
+		draw(int(t.Count))
 	})
 	ui.Loop()
 	return nil
