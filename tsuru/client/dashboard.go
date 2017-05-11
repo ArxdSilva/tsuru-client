@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"sort"
 
 	ui "github.com/gizak/termui"
 	"github.com/tsuru/tsuru/cmd"
@@ -52,6 +53,12 @@ func (c *Dashboard) userEmail(client *cmd.Client) (string, error) {
 	return r.Email, nil
 }
 
+type apps []app
+
+func (a apps) Len() int           { return len(a) }
+func (a apps) Less(i, j int) bool { return a[i].Name < a[j].Name }
+func (a apps) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+
 func (c *Dashboard) startDashboard(client *cmd.Client) error {
 	usrEmail, err := c.userEmail(client)
 	if err != nil {
@@ -80,6 +87,7 @@ func (c *Dashboard) startDashboard(client *cmd.Client) error {
 
 	apps := [][]string{[]string{"#", "app-list"}}
 	var appIndex = 1
+	sort.Sort(appsList)
 	for _, v := range appsList {
 		row := []string{fmt.Sprintf("%v", appIndex), v.Name}
 		apps = append(apps, row)
@@ -93,25 +101,27 @@ func (c *Dashboard) startDashboard(client *cmd.Client) error {
 	data := []int{}
 	unitsLabels := []string{}
 	var unitsIndex = 1
-	for range appsList {
+	for _, a := range appsList {
 		unitsLabels = append(unitsLabels, fmt.Sprintf("#%v", unitsIndex))
-		data = append(data, unitsIndex)
+		data = append(data, len(a.Units))
 		unitsIndex++
 	}
 
 	units.Data = data
-	units.Height = height
+	units.Height = 11
 	units.BorderLabel = "Units"
 	units.DataLabels = unitsLabels
 	ui.Body.AddRows(
 		ui.NewRow(
-			ui.NewCol(12, 0, help),
+			ui.NewCol(6, 0, email),
+			ui.NewCol(6, 0, help),
 		),
 		ui.NewRow(
-			ui.NewCol(3, 0, email),
-			ui.NewCol(3, 0, targetListUI),
-			ui.NewCol(3, 0, appsUI),
-			ui.NewCol(3, 0, units),
+			ui.NewCol(6, 0, targetListUI),
+			ui.NewCol(6, 0, appsUI),
+		),
+		ui.NewRow(
+			ui.NewCol(12, 0, units),
 		),
 	)
 	ui.Body.Align()
@@ -129,7 +139,7 @@ func (c *Dashboard) startDashboard(client *cmd.Client) error {
 	return nil
 }
 
-func getApps(client *cmd.Client) ([]app, error) {
+func getApps(client *cmd.Client) (apps, error) {
 	filter := appFilter{}
 	qs, err := filter.queryString(client)
 	if err != nil {
@@ -155,10 +165,10 @@ func getApps(client *cmd.Client) ([]app, error) {
 	if err != nil {
 		return nil, err
 	}
-	var apps []app
-	err = json.Unmarshal(result, &apps)
+	var appsList apps
+	err = json.Unmarshal(result, &appsList)
 	if err != nil {
 		return nil, err
 	}
-	return apps, nil
+	return appsList, nil
 }
