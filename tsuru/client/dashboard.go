@@ -10,6 +10,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"sort"
+	"strconv"
 
 	ui "github.com/gizak/termui"
 	"github.com/tsuru/tsuru/cmd"
@@ -21,20 +22,20 @@ func (c *Dashboard) Info() *cmd.Info {
 	return &cmd.Info{
 		Name:    "dashboard",
 		Usage:   "dashboard",
-		Desc:    "Displays a dashboard of information about the user and his/her apps",
+		Desc:    "Displays a dashboard of useful information about the user's apps",
 		MaxArgs: 0,
 	}
 }
 
 func (c *Dashboard) Run(context *cmd.Context, client *cmd.Client) error {
-	err := c.startDashboard(client)
+	err := startDashboard(client)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (c *Dashboard) userEmail(client *cmd.Client) (string, error) {
+func getUserEmail(client *cmd.Client) (string, error) {
 	u, err := cmd.GetURL("/users/info")
 	if err != nil {
 		return "", err
@@ -59,8 +60,8 @@ func (a apps) Len() int           { return len(a) }
 func (a apps) Less(i, j int) bool { return a[i].Name < a[j].Name }
 func (a apps) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 
-func (c *Dashboard) startDashboard(client *cmd.Client) error {
-	usrEmail, err := c.userEmail(client)
+func startDashboard(client *cmd.Client) error {
+	usrEmail, err := getUserEmail(client)
 	if err != nil {
 		return err
 	}
@@ -68,7 +69,7 @@ func (c *Dashboard) startDashboard(client *cmd.Client) error {
 	if err != nil {
 		return err
 	}
-	const height = 22
+	const height = 11
 	if err := ui.Init(); err != nil {
 		return err
 	}
@@ -80,10 +81,9 @@ func (c *Dashboard) startDashboard(client *cmd.Client) error {
 	help.Height = 3
 	help.BorderLabel = "Help"
 
-	targetList := [][]string{[]string{"target", "set"}}
-	targetListUI := ui.NewTable()
-	targetListUI.Rows = targetList
-	targetListUI.Height = height
+	currentTarget := ui.NewPar("target example")
+	currentTarget.Height = 3
+	currentTarget.BorderLabel = "Tsuru Target"
 
 	apps := []string{}
 	var appIndex = 1
@@ -95,7 +95,6 @@ func (c *Dashboard) startDashboard(client *cmd.Client) error {
 	}
 	appsUI := ui.NewList()
 	appsUI.BorderLabel = "Apps"
-	appsUI.Items = apps
 	appsUI.Height = height
 
 	units := ui.NewBarChart()
@@ -103,23 +102,42 @@ func (c *Dashboard) startDashboard(client *cmd.Client) error {
 	unitsLabels := []string{}
 	var unitsIndex = 1
 	for _, a := range appsList {
-		unitsLabels = append(unitsLabels, fmt.Sprintf("#%v", unitsIndex))
+		unitsLabels = append(unitsLabels, strconv.Itoa(unitsIndex))
 		data = append(data, len(a.Units))
 		unitsIndex++
 	}
-
-	units.Data = data
-	units.Height = 11
+	units.Height = height
 	units.BorderLabel = "Units"
-	units.DataLabels = unitsLabels
+
+	poolUI := ui.NewList()
+	poolData := []string{}
+	poolList, err := getPools(client)
+	if err != nil {
+		return err
+	}
+	poolUI.BorderLabel = "    Pool    |    Kind    |    Provisioner"
+	poolUI.Height = height
+	for _, p := range poolList {
+		var pData string
+		if p.Public {
+			pData = fmt.Sprintf("    %s    |   public  |   %s", p.Name, p.Provisioner)
+		} else if p.Default {
+			pData = fmt.Sprintf("    %s    |   default  |   %s", p.Name, p.Provisioner)
+		} else {
+			pData = fmt.Sprintf("    %s    |   -  |   %s", p.Name, p.Provisioner)
+		}
+		poolData = append(poolData, pData)
+	}
+
 	ui.Body.AddRows(
 		ui.NewRow(
-			ui.NewCol(6, 0, email),
-			ui.NewCol(6, 0, help),
+			ui.NewCol(4, 0, email),
+			ui.NewCol(4, 0, help),
+			ui.NewCol(4, 0, currentTarget),
 		),
 		ui.NewRow(
-			ui.NewCol(6, 0, targetListUI),
 			ui.NewCol(6, 0, appsUI),
+			ui.NewCol(6, 0, poolUI),
 		),
 		ui.NewRow(
 			ui.NewCol(12, 0, units),
@@ -127,7 +145,10 @@ func (c *Dashboard) startDashboard(client *cmd.Client) error {
 	)
 	ui.Body.Align()
 	draw := func(t int) {
-		appsUI.Items = apps[t%9:]
+		appsUI.Items = apps[t%(len(apps)):]
+		units.Data = data[t%(len(data)):]
+		units.DataLabels = unitsLabels[t%(len(unitsLabels)):]
+		poolUI.Items = poolData[t%(len(poolData)):]
 		ui.Render(ui.Body)
 	}
 	ui.Handle("/sys/kbd/q", func(ui.Event) {
@@ -179,4 +200,29 @@ func getApps(client *cmd.Client) (apps, error) {
 		return nil, err
 	}
 	return appsList, nil
+}
+
+func getPools(client *cmd.Client) ([]Pool, error) {
+	url, err := cmd.GetURL("/pools")
+	if err != nil {
+		return nil, err
+	}
+	request, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := client.Do(request)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode == http.StatusNoContent {
+		return nil, nil
+	}
+	defer resp.Body.Close()
+	var pools []Pool
+	err = json.NewDecoder(resp.Body).Decode(&pools)
+	if err != nil {
+		return nil, err
+	}
+	return pools, nil
 }
