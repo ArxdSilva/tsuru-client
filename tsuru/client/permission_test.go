@@ -178,7 +178,7 @@ func (s *S) TestRoleAssignInfo(c *check.C) {
 func (s *S) TestRoleAssignRun(c *check.C) {
 	var stdout, stderr bytes.Buffer
 	context := cmd.Context{
-		Args:   []string{"myrole", "me@me.com", "myapp"},
+		Args:   []string{"myrole", "myapp"},
 		Stdout: &stdout,
 		Stderr: &stderr,
 	}
@@ -191,9 +191,32 @@ func (s *S) TestRoleAssignRun(c *check.C) {
 	}
 	client := cmd.NewClient(&http.Client{Transport: trans}, nil, manager)
 	command := RoleAssign{}
+	command.Flags().Parse(true, []string{"-u", "me@me.com"})
 	err := command.Run(&context, client)
 	c.Assert(err, check.IsNil)
 	c.Assert(stdout.String(), check.Equals, "Role successfully assigned!\n")
+}
+
+func (s *S) TestRoleAssignRunError(c *check.C) {
+	var stdout, stderr bytes.Buffer
+	context := cmd.Context{
+		Args:   []string{"myrole", "myapp"},
+		Stdout: &stdout,
+		Stderr: &stderr,
+	}
+	trans := &cmdtest.ConditionalTransport{
+		Transport: cmdtest.Transport{Message: string(""), Status: http.StatusCreated},
+		CondFunc: func(req *http.Request) bool {
+			return strings.HasSuffix(req.URL.Path, "/roles/myrole/user") && req.Method == "POST" &&
+				req.FormValue("email") == "me@me.com" && req.FormValue("context") == "myapp"
+		},
+	}
+	client := cmd.NewClient(&http.Client{Transport: trans}, nil, manager)
+	command := RoleAssign{}
+	command.Flags().Parse(true, []string{"-u", "me@me.com", "-t", "Syncopy"})
+	err := command.Run(&context, client)
+	c.Assert(err, check.NotNil)
+	c.Assert(err.Error(), check.Equals, "Cannot assign role to team and user at the same time!\n")
 }
 
 func (s *S) TestRoleDissociateInfo(c *check.C) {

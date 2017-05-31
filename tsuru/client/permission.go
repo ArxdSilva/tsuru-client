@@ -357,27 +357,47 @@ func (c *RolePermissionRemove) Run(context *cmd.Context, client *cmd.Client) err
 	return nil
 }
 
-type RoleAssign struct{}
+type RoleAssign struct {
+	fs        *gnuflag.FlagSet
+	userEmail string
+	team      string
+}
 
 func (c *RoleAssign) Info() *cmd.Info {
 	return &cmd.Info{
 		Name:    "role-assign",
-		Usage:   "role-assign <role-name> <user-email> [<context-value>]",
-		Desc:    `Assign an existing role to a user with some context value.`,
-		MinArgs: 2,
+		Usage:   "role-assign <role-name> [<context-value>] [-u/--user <user-email>] [-t/--team <team-name>]",
+		Desc:    `Assign an existing role to a user or to a team with some context value.`,
+		MinArgs: 1,
 	}
 }
 
+func (c *RoleAssign) Flags() *gnuflag.FlagSet {
+	if c.fs == nil {
+		c.fs = gnuflag.NewFlagSet("", gnuflag.ExitOnError)
+		user := "Adds a role to a specific user by email"
+		c.fs.StringVar(&c.userEmail, "u", "", user)
+		c.fs.StringVar(&c.userEmail, "user", "", user)
+		team := "Adds a role to a specific team"
+		c.fs.StringVar(&c.team, "t", "", team)
+		c.fs.StringVar(&c.team, "team", "", team)
+	}
+	return c.fs
+}
+
 func (c *RoleAssign) Run(context *cmd.Context, client *cmd.Client) error {
+	if (c.team != "") && (c.userEmail != "") {
+		return fmt.Errorf("Cannot assign role to team and user at the same time!\n")
+	}
 	roleName := context.Args[0]
-	userEmail := context.Args[1]
 	var contextValue string
-	if len(context.Args) > 2 {
-		contextValue = context.Args[2]
+	if len(context.Args) > 1 {
+		contextValue = context.Args[1]
 	}
 	params := url.Values{}
-	params.Set("email", userEmail)
+	params.Set("email", c.userEmail)
 	params.Set("context", contextValue)
+	params.Set("team", c.team)
 	addr, err := cmd.GetURL(fmt.Sprintf("/roles/%s/user", roleName))
 	if err != nil {
 		return err
